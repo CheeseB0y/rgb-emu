@@ -1,2 +1,2 @@
 # rgb-emu
-A simple Gameboy Emulator built by CheeseB0y in rust with zero experince building emulators. Gotta start somewhere right?
+RGB-Emu is a WIP GameBoy emulator built with the rust programming language. This project is meant to be a learning experience and practice for me. In a world where devs are increasingly relying on AI to speed up their workflow, it's more important now than ever to be a truly competent and capable developer. My goal is to build this without the help of any AI and to become a better developer in the process.
