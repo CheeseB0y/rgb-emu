@@ -144,7 +144,13 @@ impl Cpu {
         self.c
     }
     fn get_d(&self) -> u8 {
+        self.d
+    }
+    fn get_e(&self) -> u8 {
         self.e
+    }
+    fn get_f(&self) -> u8 {
+        self.f
     }
     fn get_h(&self) -> u8 {
         self.h
@@ -190,10 +196,31 @@ impl Cpu {
     fn set_e(&mut self, e: u8) {
         self.e = e;
     }
+    fn set_f(&mut self, f: u8) {
+        self.f = f;
+    }
     fn set_h(&mut self, h: u8) {
         self.h = h;
     }
     fn set_l(&mut self, l: u8) {
         self.l = l;
+    }
+}
+
+impl eframe::App for Cpu {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("rgb-emu CPU visualizer");
+            ui.label(format!("A: {}", self.get_a()));
+            ui.label(format!("B: {}", self.get_b()));
+            ui.label(format!("C: {}", self.get_c()));
+            ui.label(format!("D: {}", self.get_d()));
+            ui.label(format!("E: {}", self.get_e()));
+            ui.label(format!("F: {}", self.get_f()));
+            ui.label(format!("H: {}", self.get_h()));
+            ui.label(format!("L: {}", self.get_l()));
+            ui.label(format!("SP: {}", self.get_sp()));
+            ui.label(format!("PC: {}", self.get_pc()));
+        });
     }
 }
