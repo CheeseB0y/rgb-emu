@@ -3,10 +3,11 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::Result;
 use std::io::prelude::*;
+
 pub struct Rom {
     data: HashMap<u32, u8>,
     size: u32,
-    pub title: Vec<u8>,
+    pub title: String,
 }
 
 impl Rom {
@@ -25,14 +26,19 @@ impl Rom {
             addr += 1;
         }
         let data: HashMap<u32, u8> = data;
-        let mut title: Vec<u8> = Vec::new();
-        for i in 309..324 {
+        let mut title: Vec<char> = Vec::new();
+        for i in 308..324 {
             let value: Option<&u8> = data.get(&i);
             match value {
-                Some(byte) => title.push(byte.clone()),
-                None => title.push(0),
+                Some(byte) => {
+                    if *byte != 0 {
+                        title.push(*byte as char)
+                    }
+                }
+                None => continue,
             };
         }
+        let title: String = title.into_iter().collect();
         Self {
             data: data,
             size: addr,
@@ -68,5 +74,126 @@ impl Rom {
             print!("{:X?}:", addr);
             println!("{:X?}", &self.get_value(addr as u32));
         }
+    }
+
+    pub fn get_title(&self) -> &String {
+        &self.title
+    }
+}
+
+pub struct Cpu {
+    a: u8,
+    b: u8,
+    c: u8,
+    d: u8,
+    e: u8,
+    f: u8,
+    h: u8,
+    l: u8,
+    sp: u16,
+    pc: u16,
+}
+
+impl Default for Cpu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Cpu {
+    pub fn new() -> Self {
+        Cpu {
+            a: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+            f: 0,
+            h: 0,
+            l: 0,
+            sp: 0,
+            pc: 0,
+        }
+    }
+
+    fn get_af(&self) -> (u8, u8) {
+        (self.a, self.f)
+    }
+    fn get_bc(&self) -> (u8, u8) {
+        (self.b, self.c)
+    }
+    fn get_de(&self) -> (u8, u8) {
+        (self.d, self.e)
+    }
+    fn get_hl(&self) -> (u8, u8) {
+        (self.h, self.l)
+    }
+    fn get_sp(&self) -> u16 {
+        self.sp
+    }
+    fn get_pc(&self) -> u16 {
+        self.pc
+    }
+    fn get_a(&self) -> u8 {
+        self.a
+    }
+    fn get_b(&self) -> u8 {
+        self.b
+    }
+    fn get_c(&self) -> u8 {
+        self.c
+    }
+    fn get_d(&self) -> u8 {
+        self.e
+    }
+    fn get_h(&self) -> u8 {
+        self.h
+    }
+    fn get_l(&self) -> u8 {
+        self.l
+    }
+
+    fn set_af(&mut self, a: u8, f: u8) {
+        self.a = a;
+        self.f = f;
+    }
+    fn set_bc(&mut self, b: u8, c: u8) {
+        self.b = b;
+        self.c = c;
+    }
+    fn set_de(&mut self, d: u8, e: u8) {
+        self.d = d;
+        self.e = e;
+    }
+    fn set_hl(&mut self, h: u8, l: u8) {
+        self.h = h;
+        self.l = l;
+    }
+    fn set_sp(&mut self, sp: u16) {
+        self.sp = sp;
+    }
+    fn set_pc(&mut self, pc: u16) {
+        self.pc = pc;
+    }
+    fn set_a(&mut self, a: u8) {
+        self.a = a;
+    }
+    fn set_b(&mut self, b: u8) {
+        self.b = b;
+    }
+    fn set_c(&mut self, c: u8) {
+        self.c = c;
+    }
+    fn set_d(&mut self, d: u8) {
+        self.d = d;
+    }
+    fn set_e(&mut self, e: u8) {
+        self.e = e;
+    }
+    fn set_h(&mut self, h: u8) {
+        self.h = h;
+    }
+    fn set_l(&mut self, l: u8) {
+        self.l = l;
     }
 }
