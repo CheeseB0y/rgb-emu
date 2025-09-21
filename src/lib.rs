@@ -111,8 +111,8 @@ impl Cpu {
             f: 0,
             h: 0,
             l: 0,
-            sp: 0,
-            pc: 0,
+            sp: 65534,
+            pc: 256,
         }
     }
 
@@ -205,22 +205,35 @@ impl Cpu {
     fn set_l(&mut self, l: u8) {
         self.l = l;
     }
+
+    fn nop(&mut self) {
+        self.pc += 1;
+    }
+
+
+    fn exec(&mut self, rom: Rom) {
+        let op: &u8 = rom.get_value(self.pc as u32);
+        match op {
+            0 => self.nop(),
+            _ => panic!("Instruction not yet implemented"),
+        }
+    }
 }
 
 impl eframe::App for Cpu {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("rgb-emu CPU visualizer");
-            ui.label(format!("A: {}", self.get_a()));
-            ui.label(format!("B: {}", self.get_b()));
-            ui.label(format!("C: {}", self.get_c()));
-            ui.label(format!("D: {}", self.get_d()));
-            ui.label(format!("E: {}", self.get_e()));
-            ui.label(format!("F: {}", self.get_f()));
-            ui.label(format!("H: {}", self.get_h()));
-            ui.label(format!("L: {}", self.get_l()));
-            ui.label(format!("SP: {}", self.get_sp()));
-            ui.label(format!("PC: {}", self.get_pc()));
+            ui.label(format!("A: {:X?}", self.a));
+            ui.label(format!("B: {:X?}", self.b));
+            ui.label(format!("C: {:X?}", self.c));
+            ui.label(format!("D: {:X?}", self.d));
+            ui.label(format!("E: {:X?}", self.e));
+            ui.label(format!("F: {:X?}", self.f));
+            ui.label(format!("H: {:X?}", self.h));
+            ui.label(format!("L: {:X?}", self.l));
+            ui.label(format!("SP: {:X?}", self.sp));
+            ui.label(format!("PC: {:X?}", self.pc));
         });
     }
 }
