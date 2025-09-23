@@ -1,3 +1,4 @@
+use std::collections::btree_map::Values;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -7,9 +8,12 @@ use eframe::App;
 
 pub struct Rom {
     data: HashMap<u32, u8>,
-    size: u32,
     pub title: String,
     cart_type: CartType,
+    rom_size: u32,
+    rom_banks: u16,
+    ram_size: u32,
+    ram_banks:  u8,
 }
 
 enum CartType {
@@ -77,11 +81,62 @@ impl Rom {
             None => &0,
         };
         let cart_type: CartType = Rom::get_cart_type(cart_type_value);
+        let rom_size_value: &u8 = match data.get(&328) {
+            Some(value) => value,
+            None => &0,
+        };
+        let rom_size: u32 = match rom_size_value {
+            0 => 32768,
+            1 => 65536,
+            2 => 131072,
+            3 => 262144,
+            4 => 524288,
+            5 => 1048576,
+            6 => 2097152,
+            7 => 4194304,
+            8 => 8388608,
+            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
+        };
+        let rom_banks: u16 = match rom_size_value {
+            0 => 2,
+            1 => 4,
+            2 => 8,
+            3 => 16,
+            4 => 32,
+            5 => 64,
+            6 => 128,
+            7 => 256,
+            8 => 512,
+            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
+        };
+        let ram_size_value: &u8 = match data.get(&329) {
+            Some(value) => value,
+            None => &0,
+        };
+        let ram_size: u32 = match ram_size_value {
+            0 => 0,
+            2 => 8192,
+            3 => 32768,
+            4 => 131072,
+            5 => 65536,
+            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
+        };
+        let ram_banks: u8 = match  rom_size_value {
+            0 => 0,
+            2 => 1,
+            3 => 4,
+            4 => 16,
+            5 => 8,
+            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
+        };
         Self {
             data: data,
-            size: addr,
             title: title,
             cart_type: cart_type,
+            rom_size: rom_size,
+            rom_banks: rom_banks,
+            ram_size: ram_size,
+            ram_banks: ram_banks,
         }
     }
 
@@ -139,11 +194,11 @@ impl Rom {
     }
 
     pub fn rom_size(&self) -> &u32 {
-        &self.size
+        &self.rom_size
     }
 
     pub fn print_rom(&self) {
-        for addr in 0..self.size as i32 {
+        for addr in 0..self.rom_size as i32 {
             print!("{:X?}:", addr);
             println!("{:X?}", &self.get_value(addr as u32));
         }
