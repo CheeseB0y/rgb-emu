@@ -1,19 +1,18 @@
-use std::collections::btree_map::Values;
+use eframe::App;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Result;
 use std::io::prelude::*;
-use eframe::App;
 
 pub struct Rom {
     data: HashMap<u32, u8>,
     pub title: String,
     cart_type: CartType,
     rom_size: u32,
-    rom_banks: u16,
+    rom_banks: u32,
     ram_size: u32,
-    ram_banks:  u8,
+    ram_banks: u32,
 }
 
 enum CartType {
@@ -64,11 +63,11 @@ impl Rom {
         }
         let data: HashMap<u32, u8> = data;
         let mut title: Vec<char> = Vec::new();
-        for i in 308..324 {
+        for i in 0x0134..0x0143 {
             let value: Option<&u8> = data.get(&i);
             match value {
                 Some(byte) => {
-                    if *byte != 0 {
+                    if *byte != 0x00 {
                         title.push(*byte as char)
                     }
                 }
@@ -76,58 +75,38 @@ impl Rom {
             };
         }
         let title: String = title.into_iter().collect();
-        let cart_type_value = match data.get(&327) {
+        let cart_type: &u8 = match data.get(&0x0147) {
+            Some(value) => value,
+            None => &0x00,
+        };
+        let cart_type: CartType = Rom::get_cart_type(cart_type);
+        let rom_size: &u8 = match data.get(&0x0148) {
+            Some(value) => value,
+            None => &0x00,
+        };
+        let (rom_size, rom_banks) = match rom_size {
+            0x00 => (32768, 2),
+            0x01 => (65536, 4),
+            0x02 => (131072, 8),
+            0x03 => (262144, 16),
+            0x04 => (524288, 32),
+            0x05 => (1048576, 64),
+            0x06 => (2097152, 128),
+            0x07 => (4194304, 256),
+            0x08 => (8388608, 512),
+            _ => panic!("Invalid rom size value: {:X?}", rom_size),
+        };
+        let ram_size: &u8 = match data.get(&0x0149) {
             Some(value) => value,
             None => &0,
         };
-        let cart_type: CartType = Rom::get_cart_type(cart_type_value);
-        let rom_size_value: &u8 = match data.get(&328) {
-            Some(value) => value,
-            None => &0,
-        };
-        let rom_size: u32 = match rom_size_value {
-            0 => 32768,
-            1 => 65536,
-            2 => 131072,
-            3 => 262144,
-            4 => 524288,
-            5 => 1048576,
-            6 => 2097152,
-            7 => 4194304,
-            8 => 8388608,
-            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
-        };
-        let rom_banks: u16 = match rom_size_value {
-            0 => 2,
-            1 => 4,
-            2 => 8,
-            3 => 16,
-            4 => 32,
-            5 => 64,
-            6 => 128,
-            7 => 256,
-            8 => 512,
-            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
-        };
-        let ram_size_value: &u8 = match data.get(&329) {
-            Some(value) => value,
-            None => &0,
-        };
-        let ram_size: u32 = match ram_size_value {
-            0 => 0,
-            2 => 8192,
-            3 => 32768,
-            4 => 131072,
-            5 => 65536,
-            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
-        };
-        let ram_banks: u8 = match  rom_size_value {
-            0 => 0,
-            2 => 1,
-            3 => 4,
-            4 => 16,
-            5 => 8,
-            _ => panic!("Invalid rom size value: {:X?}", rom_size_value),
+        let (ram_size, ram_banks) = match ram_size {
+            0x00 => (0, 0),
+            0x02 => (8192, 1),
+            0x03 => (32768, 4),
+            0x04 => (131072, 16),
+            0x05 => (65536, 8),
+            _ => panic!("Invalid ram size value: {:X?}", ram_size),
         };
         Self {
             data: data,
@@ -161,34 +140,34 @@ impl Rom {
 
     fn get_cart_type(value: &u8) -> CartType {
         match value {
-            0 => CartType::ROMONLY,
-            1 => CartType::MBC1,
-            2 => CartType::MBC1RAM,
-            3 => CartType::MBC1RAMBATTERY,
-            5 => CartType::MBC2,
-            6 => CartType::MBC2BATTERY,
-            8 => CartType::ROMRAM,
-            9 => CartType::ROMRAMBATTERY,
-            11 => CartType::MMM01,
-            12 => CartType::MMM01RAM,
-            13 => CartType::MMM01RAMBATTERY,
-            15 => CartType::MBC3TIMERBATTERY,
-            16 => CartType::MBC3TIMERRAMBATTERY,
-            17 => CartType::MBC3,
-            18 => CartType::MBC3RAM,
-            19 => CartType::MBC3RAMBATTERY,
-            25 => CartType::MBC5,
-            26 => CartType::MBC5RAM,
-            27 => CartType::MBC5RAMBATTERY,
-            28 => CartType::MBC5RUMBLE,
-            29 => CartType::MBC5RUMBLERAM,
-            30 => CartType::MBC5RUMBLERAMBATTERY,
-            32 => CartType::MBC6,
-            34 => CartType::MBC7SENSORRUMBLERAMBATTERY,
-            252 => CartType::POCKETCAMERA,
-            253 => CartType::BANDAITAMA5,
-            254 => CartType::HuC3,
-            255 => CartType::HuC1RAMBATTERY,
+            0x00 => CartType::ROMONLY,
+            0x01 => CartType::MBC1,
+            0x02 => CartType::MBC1RAM,
+            0x03 => CartType::MBC1RAMBATTERY,
+            0x05 => CartType::MBC2,
+            0x06 => CartType::MBC2BATTERY,
+            0x08 => CartType::ROMRAM,
+            0x09 => CartType::ROMRAMBATTERY,
+            0x0B => CartType::MMM01,
+            0x0C => CartType::MMM01RAM,
+            0x0D => CartType::MMM01RAMBATTERY,
+            0x0F => CartType::MBC3TIMERBATTERY,
+            0x10 => CartType::MBC3TIMERRAMBATTERY,
+            0x11 => CartType::MBC3,
+            0x12 => CartType::MBC3RAM,
+            0x13 => CartType::MBC3RAMBATTERY,
+            0x19 => CartType::MBC5,
+            0x1A => CartType::MBC5RAM,
+            0x1B => CartType::MBC5RAMBATTERY,
+            0x1C => CartType::MBC5RUMBLE,
+            0x1D => CartType::MBC5RUMBLERAM,
+            0x1E => CartType::MBC5RUMBLERAMBATTERY,
+            0x20 => CartType::MBC6,
+            0x22 => CartType::MBC7SENSORRUMBLERAMBATTERY,
+            0xFC => CartType::POCKETCAMERA,
+            0xFD => CartType::BANDAITAMA5,
+            0xFE => CartType::HuC3,
+            0xFF => CartType::HuC1RAMBATTERY,
             _ => panic!("Unknown cartridge type: {:X?}", value),
         }
     }
@@ -231,16 +210,16 @@ impl Default for Cpu {
 impl Cpu {
     pub fn new() -> Self {
         Cpu {
-            a: 0,
-            b: 0,
-            c: 0,
-            d: 0,
-            e: 0,
-            f: 0,
-            h: 0,
-            l: 0,
-            sp: 65534,
-            pc: 256,
+            a: 0x00,
+            b: 0x00,
+            c: 0x00,
+            d: 0x00,
+            e: 0x00,
+            f: 0x00,
+            h: 0x00,
+            l: 0x00,
+            sp: 0xFFFE,
+            pc: 0x0100,
         }
     }
 
@@ -261,22 +240,22 @@ impl Cpu {
         panic!("Instruction not yet implemented");
     }
     // 03
-    fn incbc (&mut self) {
+    fn incbc(&mut self) {
         panic!("Instruction not yet implemented");
     }
     // 04
-    fn incb (&mut self) {
+    fn incb(&mut self) {
         panic!("Instruction not yet implemented");
     }
 
     pub fn exec(&mut self, rom: &Rom) {
         let op: &u8 = &rom.get_value(self.pc as u32);
         match op {
-            0 => self.nop(),
-            1 => self.ldbcn16(&rom),
-            2 => self.ldbca(&rom),
-            3 => self.incbc(),
-            4 => self.incb(),
+            0x00 => self.nop(),
+            0x01 => self.ldbcn16(&rom),
+            0x02 => self.ldbca(&rom),
+            0x03 => self.incbc(),
+            0x04 => self.incb(),
             _ => panic!("Instruction not yet implemented"),
         }
     }
@@ -300,10 +279,10 @@ impl MemBus {
         MemBus {
             rom: rom,
             ram: ram,
-            vram: vram
+            vram: vram,
         }
     }
-    
+
     // fn access(addr: u16) -> u8 {
     //     if addr < 16384 {
 
@@ -317,9 +296,7 @@ pub struct Gui {
 
 impl Gui {
     pub fn new(cpu: Cpu) -> Self {
-        Gui {
-            cpu: cpu,
-        }
+        Gui { cpu: cpu }
     }
 }
 
