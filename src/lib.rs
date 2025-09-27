@@ -6,7 +6,7 @@ use std::io::Result;
 use std::io::prelude::*;
 
 pub struct Rom {
-    data: HashMap<u32, u8>,
+    data: HashMap<u16, u8>, // Program will crash when attempting to read ROMs larger than 64KiB to be fixed later
     pub title: String,
     cart_type: CartType,
     rom_size: u32,
@@ -48,20 +48,7 @@ enum CartType {
 
 impl Rom {
     pub fn new(path: &String) -> Self {
-        let file: BufReader<File> = Rom::read_rom(path);
-        let mut data: HashMap<u32, u8> = HashMap::new();
-        let mut addr: u32 = 0;
-        for byte in file.bytes() {
-            match byte {
-                Ok(entry) => data.insert(addr, entry),
-                Err(e) => {
-                    eprintln!("Unable to parse byte at addr: {:X?}", addr);
-                    panic!("{e}");
-                }
-            };
-            addr += 1;
-        }
-        let data: HashMap<u32, u8> = data;
+        let data: HashMap<u16, u8> = Rom::map_data(Rom::read_rom(path));
         let mut title: Vec<char> = Vec::new();
         for i in 0x0134..0x0143 {
             let value: Option<&u8> = data.get(&i);
@@ -84,30 +71,12 @@ impl Rom {
             Some(value) => value,
             None => &0x00,
         };
-        let (rom_size, rom_banks) = match rom_size {
-            0x00 => (32768, 2),
-            0x01 => (65536, 4),
-            0x02 => (131072, 8),
-            0x03 => (262144, 16),
-            0x04 => (524288, 32),
-            0x05 => (1048576, 64),
-            0x06 => (2097152, 128),
-            0x07 => (4194304, 256),
-            0x08 => (8388608, 512),
-            _ => panic!("Invalid rom size value: {:X?}", rom_size),
-        };
+        let (rom_size, rom_banks) = Rom::get_rom_size_banks(rom_size);
         let ram_size: &u8 = match data.get(&0x0149) {
             Some(value) => value,
             None => &0,
         };
-        let (ram_size, ram_banks) = match ram_size {
-            0x00 => (0, 0),
-            0x02 => (8192, 1),
-            0x03 => (32768, 4),
-            0x04 => (131072, 16),
-            0x05 => (65536, 8),
-            _ => panic!("Invalid ram size value: {:X?}", ram_size),
-        };
+        let (ram_size, ram_banks) = Rom::get_ram_size_banks(ram_size);
         Self {
             data: data,
             title: title,
@@ -119,6 +88,20 @@ impl Rom {
         }
     }
 
+    fn map_data(file: BufReader<File>) -> HashMap<u16, u8> {
+        let mut data: HashMap<u16, u8> = HashMap::new();
+        for (addr, byte) in (0_u16..).zip(file.bytes()) {
+            match byte {
+                Ok(entry) => data.insert(addr, entry),
+                Err(e) => {
+                    eprintln!("Unable to parse byte at addr: {:X?}. Error: {e}", addr);
+                    continue;
+                }
+            };
+        }
+        data
+    }
+
     fn read_rom(path: &String) -> BufReader<File> {
         let file_result: Result<File> = File::open(path);
 
@@ -128,14 +111,6 @@ impl Rom {
         };
 
         BufReader::new(file)
-    }
-
-    pub fn get_value(&self, addr: u32) -> &u8 {
-        let get: &Option<&u8> = &self.data.get(&addr);
-        match get {
-            Some(byte) => byte,
-            None => &0,
-        }
     }
 
     fn get_cart_type(value: &u8) -> CartType {
@@ -172,14 +147,47 @@ impl Rom {
         }
     }
 
+    fn get_rom_size_banks(value: &u8) -> (u32, u32) {
+        match value {
+            0x00 => (32768, 2),
+            0x01 => (65536, 4),
+            0x02 => (131072, 8),
+            0x03 => (262144, 16),
+            0x04 => (524288, 32),
+            0x05 => (1048576, 64),
+            0x06 => (2097152, 128),
+            0x07 => (4194304, 256),
+            0x08 => (8388608, 512),
+            _ => panic!("Invalid rom size value: {:X?}", value),
+        }
+    }
+
+    fn get_ram_size_banks(value: &u8) -> (u32, u32) {
+        match value {
+            0x00 => (0, 0),
+            0x02 => (8192, 1),
+            0x03 => (32768, 4),
+            0x04 => (131072, 16),
+            0x05 => (65536, 8),
+            _ => panic!("Invalid ram size value: {:X?}", value),
+        }
+    }
+
     pub fn rom_size(&self) -> &u32 {
         &self.rom_size
     }
 
+    pub fn get_value(&self, addr: u16) -> &u8 {
+        match &self.data.get(&addr) {
+            Some(byte) => byte,
+            None => &0x00,
+        }
+    }
+
     pub fn print_rom(&self) {
-        for addr in 0..self.rom_size as i32 {
+        for addr in 0..self.rom_size {
             print!("{:X?}:", addr);
-            println!("{:X?}", &self.get_value(addr as u32));
+            println!("{:X?}", &self.get_value(addr as u16));
         }
     }
 
@@ -230,9 +238,9 @@ impl Cpu {
     // 01
     fn ldbcn16(&mut self, rom: &Rom) {
         self.pc += 1;
-        self.b = rom.get_value(self.pc as u32).clone();
+        self.b = rom.get_value(self.pc).clone();
         self.pc += 1;
-        self.c = rom.get_value(self.pc as u32).clone();
+        self.c = rom.get_value(self.pc).clone();
         self.pc += 1;
     }
     // 02
@@ -249,7 +257,7 @@ impl Cpu {
     }
 
     pub fn exec(&mut self, rom: &Rom) {
-        let op: &u8 = &rom.get_value(self.pc as u32);
+        let op: &u8 = &rom.get_value(self.pc);
         match op {
             0x00 => self.nop(),
             0x01 => self.ldbcn16(&rom),
@@ -261,33 +269,83 @@ impl Cpu {
     }
 }
 
-pub struct Ram {
+pub struct Wram {
     data: HashMap<u16, u8>,
+}
+impl Wram {
+    pub fn set_value(&mut self, addr: u16, entry: u8) {
+        self.data.insert(addr, entry);
+    }
+    pub fn get_value(&self, addr: u16) -> &u8 {
+        match &self.data.get(&addr) {
+            Some(byte) => byte,
+            None => &0x00,
+        }
+    }
 }
 pub struct Vram {
     data: HashMap<u16, u8>,
 }
+impl Vram {
+    pub fn set_value(&mut self, addr: u16, entry: u8) {
+        self.data.insert(addr, entry);
+    }
+    pub fn get_value(&self, addr: u16) -> &u8 {
+        match &self.data.get(&addr) {
+            Some(byte) => byte,
+            None => &0x00,
+        }
+    }
+}
 
 pub struct MemBus {
     rom: Rom,
-    ram: Ram,
+    wram: Wram,
     vram: Vram,
 }
 
 impl MemBus {
-    pub fn new(rom: Rom, ram: Ram, vram: Vram) -> Self {
+    pub fn new(rom: Rom, wram: Wram, vram: Vram) -> Self {
         MemBus {
             rom: rom,
-            ram: ram,
+            wram: wram,
             vram: vram,
         }
     }
 
-    // fn access(addr: u16) -> u8 {
-    //     if addr < 16384 {
+    fn access(&self, addr: u16) -> &u8 {
+        match addr {
+            0x0000..=0x3FFF => self.rom.get_value(addr),
+            0x4000..=0x7FFF => self.rom.get_value(addr), // This should be able to access switchable rom banks through a mapper, to be fixed later.
+            0x8000..=0x9FFF => self.vram.get_value(addr),
+            0xA000..=0xBFFF => &0x00, // should access external ram on cartridge
+            0xC000..=0xCFFF => self.wram.get_value(addr),
+            0xD000..=0xDFFF => self.wram.get_value(addr), // This should also be a switchable bank to be fixed later
+            0xE000..=0xFDFF => &0x00,
+            0xFE00..=0xFE9F => &0x00,
+            0xFEA0..=0xFEFF => &0xFF,
+            0xFF00..=0xFF7F => &0x00,
+            0xFF80..=0xFFFE => &0x00,
+            0xFFFF => &0x00,
+        }
+    }
 
-    //     }
-    // }
+    fn write(&mut self, addr: u16, entry: u8) {
+        match addr {
+            0x0000..=0x3FFF => eprintln!("Attempted to write to ROM address {addr}"),
+            0x4000..=0x7FFF => eprintln!("Attempted to write to ROM address {addr}"),
+            0x8000..=0x9FFF => self.vram.set_value(addr, entry),
+            0xA000..=0xBFFF => (), // should access external ram on cartridge
+            0xC000..=0xCFFF => self.wram.set_value(addr, entry),
+            0xD000..=0xDFFF => self.wram.set_value(addr, entry), // This should be a switchable bank to be fixed later
+            0xE000..=0xFDFF => (),
+            0xFE00..=0xFE9F => (),
+            0xFEA0..=0xFEFF => (),
+            0xFF00..=0xFF7F => (),
+            0xFF80..=0xFFFE => (),
+            0xFFFF => (),
+        };
+    }
 }
 
 pub struct Gui {
