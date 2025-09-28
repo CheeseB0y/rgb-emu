@@ -1,7 +1,6 @@
 use eframe::App;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::Result;
 use std::io::prelude::*;
 
@@ -48,7 +47,7 @@ enum CartType {
 
 impl Rom {
     pub fn new(path: &String) -> Self {
-        let data: HashMap<u16, u8> = Rom::map_data(Rom::read_rom(path));
+        let data: HashMap<u16, u8> = Rom::read_rom(path);
         let mut title: Vec<char> = Vec::new();
         for i in 0x0134..0x0143 {
             let value: Option<&u8> = data.get(&i);
@@ -88,7 +87,14 @@ impl Rom {
         }
     }
 
-    fn map_data(file: BufReader<File>) -> HashMap<u16, u8> {
+    fn read_rom(path: &String) -> HashMap<u16, u8> {
+        let file: Result<File> = File::open(path);
+
+        let file: File = match file {
+            Ok(f) => f,
+            Err(e) => panic!("ROM file not found. {e}"),
+        };
+
         let mut data: HashMap<u16, u8> = HashMap::new();
         for (addr, byte) in (0_u16..).zip(file.bytes()) {
             match byte {
@@ -102,19 +108,8 @@ impl Rom {
         data
     }
 
-    fn read_rom(path: &String) -> BufReader<File> {
-        let file_result: Result<File> = File::open(path);
-
-        let file: File = match file_result {
-            Ok(f) => f,
-            Err(e) => panic!("ROM file not found. {e}"),
-        };
-
-        BufReader::new(file)
-    }
-
-    fn get_cart_type(value: &u8) -> CartType {
-        match value {
+    fn get_cart_type(byte: &u8) -> CartType {
+        match byte {
             0x00 => CartType::ROMONLY,
             0x01 => CartType::MBC1,
             0x02 => CartType::MBC1RAM,
@@ -143,12 +138,12 @@ impl Rom {
             0xFD => CartType::BANDAITAMA5,
             0xFE => CartType::HuC3,
             0xFF => CartType::HuC1RAMBATTERY,
-            _ => panic!("Unknown cartridge type: {:X?}", value),
+            _ => panic!("Unknown cartridge type: {:X?}", byte),
         }
     }
 
-    fn get_rom_size_banks(value: &u8) -> (u32, u32) {
-        match value {
+    fn get_rom_size_banks(byte: &u8) -> (u32, u32) {
+        match byte {
             0x00 => (32768, 2),
             0x01 => (65536, 4),
             0x02 => (131072, 8),
@@ -158,18 +153,18 @@ impl Rom {
             0x06 => (2097152, 128),
             0x07 => (4194304, 256),
             0x08 => (8388608, 512),
-            _ => panic!("Invalid rom size value: {:X?}", value),
+            _ => panic!("Invalid rom size value: {:X?}", byte),
         }
     }
 
-    fn get_ram_size_banks(value: &u8) -> (u32, u32) {
-        match value {
+    fn get_ram_size_banks(byte: &u8) -> (u32, u32) {
+        match byte {
             0x00 => (0, 0),
             0x02 => (8192, 1),
             0x03 => (32768, 4),
             0x04 => (131072, 16),
             0x05 => (65536, 8),
-            _ => panic!("Invalid ram size value: {:X?}", value),
+            _ => panic!("Invalid ram size value: {:X?}", byte),
         }
     }
 
@@ -207,16 +202,11 @@ pub struct Cpu {
     l: u8,
     sp: u16,
     pc: u16,
-}
-
-impl Default for Cpu {
-    fn default() -> Self {
-        Self::new()
-    }
+    membus: MemBus,
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn new(membus: MemBus) -> Self {
         Cpu {
             a: 0x00,
             b: 0x00,
@@ -228,7 +218,24 @@ impl Cpu {
             l: 0x00,
             sp: 0xFFFE,
             pc: 0x0100,
+            membus: membus,
         }
+    }
+
+    fn get_af(&self) -> u16 {
+        (self.a as u16) << 8 | self.f as u16
+    }
+
+    fn get_bc(&self) -> u16 {
+        (self.b as u16) << 8 | self.c as u16
+    }
+
+    fn get_de(&self) -> u16 {
+        (self.d as u16) << 8 | self.e as u16
+    }
+
+    fn get_hl(&self) -> u16 {
+        (self.h as u16) << 8 | self.l as u16
     }
 
     // 00
@@ -236,16 +243,18 @@ impl Cpu {
         self.pc += 1;
     }
     // 01
-    fn ldbcn16(&mut self, rom: &Rom) {
+    fn ldbcn16(&mut self) {
         self.pc += 1;
-        self.b = rom.get_value(self.pc).clone();
+        self.b = *self.membus.access(self.pc);
         self.pc += 1;
-        self.c = rom.get_value(self.pc).clone();
+        self.c = *self.membus.access(self.pc);
         self.pc += 1;
     }
     // 02
-    fn ldbca(&mut self, rom: &Rom) {
-        panic!("Instruction not yet implemented");
+    fn ldbca(&mut self, ) {
+        self.pc += 1;
+        self.membus.write(self.get_bc(), self.a);
+        self.pc += 1;
     }
     // 03
     fn incbc(&mut self) {
@@ -260,8 +269,8 @@ impl Cpu {
         let op: &u8 = &rom.get_value(self.pc);
         match op {
             0x00 => self.nop(),
-            0x01 => self.ldbcn16(&rom),
-            0x02 => self.ldbca(&rom),
+            0x01 => self.ldbcn16(),
+            0x02 => self.ldbca(),
             0x03 => self.incbc(),
             0x04 => self.incb(),
             _ => panic!("Instruction not yet implemented"),
@@ -273,6 +282,9 @@ pub struct Wram {
     data: HashMap<u16, u8>,
 }
 impl Wram {
+    pub fn new() -> Self {
+        Wram {data: HashMap::new()}
+    }
     pub fn set_value(&mut self, addr: u16, entry: u8) {
         self.data.insert(addr, entry);
     }
@@ -287,6 +299,9 @@ pub struct Vram {
     data: HashMap<u16, u8>,
 }
 impl Vram {
+    pub fn new() -> Self {
+        Vram {data: HashMap::new()}
+    }
     pub fn set_value(&mut self, addr: u16, entry: u8) {
         self.data.insert(addr, entry);
     }
@@ -305,11 +320,11 @@ pub struct MemBus {
 }
 
 impl MemBus {
-    pub fn new(rom: Rom, wram: Wram, vram: Vram) -> Self {
+    pub fn new(rom: Rom) -> Self {
         MemBus {
             rom: rom,
-            wram: wram,
-            vram: vram,
+            wram: Wram::new(),
+            vram: Vram::new(),
         }
     }
 
@@ -321,12 +336,12 @@ impl MemBus {
             0xA000..=0xBFFF => &0x00, // should access external ram on cartridge
             0xC000..=0xCFFF => self.wram.get_value(addr),
             0xD000..=0xDFFF => self.wram.get_value(addr), // This should also be a switchable bank to be fixed later
-            0xE000..=0xFDFF => &0x00,
-            0xFE00..=0xFE9F => &0x00,
-            0xFEA0..=0xFEFF => &0xFF,
-            0xFF00..=0xFF7F => &0x00,
-            0xFF80..=0xFFFE => &0x00,
-            0xFFFF => &0x00,
+            0xE000..=0xFDFF => &0x00, // Echo RAM. Can be ignored.
+            0xFE00..=0xFE9F => &0x00, // Object attribute memory
+            0xFEA0..=0xFEFF => &0xFF, // Not usable, ignore.
+            0xFF00..=0xFF7F => &0x00, // IO registers
+            0xFF80..=0xFFFE => &0x00, // High RAM
+            0xFFFF => &0x00, // Interrupt register
         }
     }
 
@@ -338,12 +353,12 @@ impl MemBus {
             0xA000..=0xBFFF => (), // should access external ram on cartridge
             0xC000..=0xCFFF => self.wram.set_value(addr, entry),
             0xD000..=0xDFFF => self.wram.set_value(addr, entry), // This should be a switchable bank to be fixed later
-            0xE000..=0xFDFF => (),
-            0xFE00..=0xFE9F => (),
-            0xFEA0..=0xFEFF => (),
-            0xFF00..=0xFF7F => (),
-            0xFF80..=0xFFFE => (),
-            0xFFFF => (),
+            0xE000..=0xFDFF => eprintln!("Attempted to write to echo RAM address {addr}"), 
+            0xFE00..=0xFE9F => (), // Object attribute memory
+            0xFEA0..=0xFEFF => eprintln!("Attempted to write to unuasable space address {addr}"),
+            0xFF00..=0xFF7F => (), // IO registers
+            0xFF80..=0xFFFE => (), // High RAM
+            0xFFFF => (), // Interrupt register
         };
     }
 }
