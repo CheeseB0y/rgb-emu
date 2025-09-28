@@ -238,42 +238,86 @@ impl Cpu {
         (self.h as u16) << 8 | self.l as u16
     }
 
+    fn inc_pc(&mut self) {
+        self.pc += 1;
+    }
+
+    // Operations need flag logic and timing logic
     // 00
     fn nop(&mut self) {
-        self.pc += 1;
+        self.inc_pc();
     }
     // 01
     fn ldbcn16(&mut self) {
-        self.pc += 1;
+        self.inc_pc();
         self.b = *self.membus.access(self.pc);
-        self.pc += 1;
+        self.inc_pc();
         self.c = *self.membus.access(self.pc);
-        self.pc += 1;
+        self.inc_pc();
     }
     // 02
-    fn ldbca(&mut self, ) {
-        self.pc += 1;
+    fn ldbca(&mut self) {
         self.membus.write(self.get_bc(), self.a);
-        self.pc += 1;
+        self.inc_pc();
     }
     // 03
     fn incbc(&mut self) {
-        panic!("Instruction not yet implemented");
+        let mut i: u16 = self.get_bc();
+        i += 1;
+        self.b = (i >> 8) as u8;
+        self.c = (i & 0xFF) as u8;
+        self.inc_pc();
     }
     // 04
     fn incb(&mut self) {
-        panic!("Instruction not yet implemented");
+        self.b += 1;
+        self.inc_pc();
     }
+    // 05
+    fn decb(&mut self) {
+        self.b -= 1;
+        self.inc_pc();
+    }
+    // 06
+    fn ldbn8(&mut self) {
+        self.pc += 1;
+        self.b = *self.membus.access(self.pc);
+        self.inc_pc();
+    }
+    // 07
+    fn rlca(&mut self) {
+        eprintln!("Instruction rlca not yet implemented at {:X?}", self.pc)
+    }
+    // 08
+    fn lda16sp(&mut self) {
+        eprintln!("Instruction lda16sp not yet implemented at {:X?}", self.pc)
+    }
+    // 09
+    fn addhlbc(&mut self) {
+        eprintln!("Instruction addhlbc not yet implemented at {:X?}", self.pc)
+    }
+    // This is a stupid way of handling instructions, rework soon.
 
-    pub fn exec(&mut self, rom: &Rom) {
-        let op: &u8 = &rom.get_value(self.pc);
+    fn exec(&mut self) {
+        let op: &u8 = self.membus.access(self.pc);
         match op {
             0x00 => self.nop(),
             0x01 => self.ldbcn16(),
             0x02 => self.ldbca(),
             0x03 => self.incbc(),
             0x04 => self.incb(),
-            _ => panic!("Instruction not yet implemented"),
+            0x05 => self.decb(),
+            0x06 => self.ldbn8(),
+            0x07 => self.rlca(),
+            0x08 => self.lda16sp(),
+            0x09 => self.addhlbc(),
+            _ => eprintln!("Instruction {:X?} not yet implemented", op),
+        }
+    }
+
+    pub fn run(&mut self) {
+        loop {
+            self.exec();
         }
     }
 }
@@ -283,7 +327,9 @@ pub struct Wram {
 }
 impl Wram {
     pub fn new() -> Self {
-        Wram {data: HashMap::new()}
+        Wram {
+            data: HashMap::new(),
+        }
     }
     pub fn set_value(&mut self, addr: u16, entry: u8) {
         self.data.insert(addr, entry);
@@ -300,7 +346,9 @@ pub struct Vram {
 }
 impl Vram {
     pub fn new() -> Self {
-        Vram {data: HashMap::new()}
+        Vram {
+            data: HashMap::new(),
+        }
     }
     pub fn set_value(&mut self, addr: u16, entry: u8) {
         self.data.insert(addr, entry);
@@ -336,12 +384,12 @@ impl MemBus {
             0xA000..=0xBFFF => &0x00, // should access external ram on cartridge
             0xC000..=0xCFFF => self.wram.get_value(addr),
             0xD000..=0xDFFF => self.wram.get_value(addr), // This should also be a switchable bank to be fixed later
-            0xE000..=0xFDFF => &0x00, // Echo RAM. Can be ignored.
-            0xFE00..=0xFE9F => &0x00, // Object attribute memory
-            0xFEA0..=0xFEFF => &0xFF, // Not usable, ignore.
-            0xFF00..=0xFF7F => &0x00, // IO registers
-            0xFF80..=0xFFFE => &0x00, // High RAM
-            0xFFFF => &0x00, // Interrupt register
+            0xE000..=0xFDFF => &0x00,                     // Echo RAM. Can be ignored.
+            0xFE00..=0xFE9F => &0x00,                     // Object attribute memory
+            0xFEA0..=0xFEFF => &0xFF,                     // Not usable, ignore.
+            0xFF00..=0xFF7F => &0x00,                     // IO registers
+            0xFF80..=0xFFFE => &0x00,                     // High RAM
+            0xFFFF => &0x00,                              // Interrupt register
         }
     }
 
@@ -353,12 +401,12 @@ impl MemBus {
             0xA000..=0xBFFF => (), // should access external ram on cartridge
             0xC000..=0xCFFF => self.wram.set_value(addr, entry),
             0xD000..=0xDFFF => self.wram.set_value(addr, entry), // This should be a switchable bank to be fixed later
-            0xE000..=0xFDFF => eprintln!("Attempted to write to echo RAM address {addr}"), 
+            0xE000..=0xFDFF => eprintln!("Attempted to write to echo RAM address {addr}"),
             0xFE00..=0xFE9F => (), // Object attribute memory
             0xFEA0..=0xFEFF => eprintln!("Attempted to write to unuasable space address {addr}"),
             0xFF00..=0xFF7F => (), // IO registers
             0xFF80..=0xFFFE => (), // High RAM
-            0xFFFF => (), // Interrupt register
+            0xFFFF => (),          // Interrupt register
         };
     }
 }
