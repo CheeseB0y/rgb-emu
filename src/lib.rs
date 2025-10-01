@@ -205,6 +205,23 @@ pub struct Cpu {
     membus: MemBus,
 }
 
+enum Register {
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    H,
+    L,
+    SP,
+    PC,
+    AF,
+    BC,
+    DE,
+    HL,
+}
+
 impl Cpu {
     pub fn new(membus: MemBus) -> Self {
         Cpu {
@@ -238,81 +255,358 @@ impl Cpu {
         (self.h as u16) << 8 | self.l as u16
     }
 
+    fn set_af(&mut self, value: u16) {
+        self.a = (value >> 8) as u8;
+        self.f = (value & 0x0F) as u8;
+    }
+
+    fn set_bc(&mut self, value: u16) {
+        self.b = (value >> 8) as u8;
+        self.c = (value & 0x0F) as u8;
+    }
+    fn set_de(&mut self, value: u16) {
+        self.d = (value >> 8) as u8;
+        self.e = (value & 0x0F) as u8;
+    }
+    fn set_hl(&mut self, value: u16) {
+        self.h = (value >> 8) as u8;
+        self.l = (value & 0x0F) as u8;
+    }
+
+    fn get_16b_value(&self) -> u16 {
+        (*self.membus.access(self.pc) as u16) << 8 | (*self.membus.access(self.pc + 1) as u16)
+    }
+
     fn inc_pc(&mut self) {
         self.pc += 1;
     }
 
+    fn not_implemented(&self) {
+        eprintln!("Instruction {:X?} not yet implemented", self.pc)
+    }
+
     // Operations need flag logic and timing logic
-    // 00
     fn nop(&mut self) {
         self.inc_pc();
     }
-    // 01
-    fn ldbcn16(&mut self) {
-        self.inc_pc();
-        self.b = *self.membus.access(self.pc);
-        self.inc_pc();
-        self.c = *self.membus.access(self.pc);
-        self.inc_pc();
-    }
-    // 02
-    fn ldbca(&mut self) {
-        self.membus.write(self.get_bc(), self.a);
-        self.inc_pc();
-    }
-    // 03
-    fn incbc(&mut self) {
-        let mut i: u16 = self.get_bc();
-        i += 1;
-        self.b = (i >> 8) as u8;
-        self.c = (i & 0xFF) as u8;
-        self.inc_pc();
-    }
-    // 04
-    fn incb(&mut self) {
-        self.b += 1;
-        self.inc_pc();
-    }
-    // 05
-    fn decb(&mut self) {
-        self.b -= 1;
+    fn load_r8r8(&mut self, source: Register, dest: Register) {
+        let value: &u8 = match source {
+            Register::A => &self.a,
+            Register::B => &self.b,
+            Register::C => &self.c,
+            Register::D => &self.d,
+            Register::E => &self.e,
+            Register::F => &self.f,
+            Register::H => &self.h,
+            Register::L => &self.l,
+            _ => {
+                eprintln!("Invalid register");
+                &0x00
+            }
+        };
+        match dest {
+            Register::A => self.a = *value,
+            Register::B => self.b = *value,
+            Register::C => self.c = *value,
+            Register::D => self.d = *value,
+            Register::E => self.e = *value,
+            Register::F => self.f = *value,
+            Register::H => self.h = *value,
+            Register::L => self.l = *value,
+            _ => eprintln!("Invalid register"),
+        };
         self.inc_pc();
     }
-    // 06
-    fn ldbn8(&mut self) {
-        self.pc += 1;
-        self.b = *self.membus.access(self.pc);
+    fn load_r8n8(&mut self, dest: Register) {
+        self.inc_pc();
+        match dest {
+            Register::A => self.a = *self.membus.access(self.pc),
+            Register::B => self.b = *self.membus.access(self.pc),
+            Register::C => self.c = *self.membus.access(self.pc),
+            Register::D => self.d = *self.membus.access(self.pc),
+            Register::E => self.e = *self.membus.access(self.pc),
+            Register::F => self.f = *self.membus.access(self.pc),
+            Register::H => self.h = *self.membus.access(self.pc),
+            Register::L => self.l = *self.membus.access(self.pc),
+            _ => eprintln!("Invalid register"),
+        };
         self.inc_pc();
     }
-    // 07
-    fn rlca(&mut self) {
-        eprintln!("Instruction rlca not yet implemented at {:X?}", self.pc)
+    fn load_r16n16(&mut self, dest: Register) {
+        self.inc_pc();
+        match dest {
+            Register::AF => self.set_af(self.get_16b_value()),
+            Register::BC => self.set_bc(self.get_16b_value()),
+            Register::DE => self.set_de(self.get_16b_value()),
+            Register::HL => self.set_hl(self.get_16b_value()),
+            Register::PC => self.pc = self.get_16b_value(),
+            Register::SP => self.sp = self.get_16b_value(),
+            _ => eprintln!("Invalid register"),
+        }
+        self.inc_pc();
+        self.inc_pc();
     }
-    // 08
-    fn lda16sp(&mut self) {
-        eprintln!("Instruction lda16sp not yet implemented at {:X?}", self.pc)
-    }
-    // 09
-    fn addhlbc(&mut self) {
-        eprintln!("Instruction addhlbc not yet implemented at {:X?}", self.pc)
-    }
-    // This is a stupid way of handling instructions, rework soon.
 
     fn exec(&mut self) {
         let op: &u8 = self.membus.access(self.pc);
         match op {
             0x00 => self.nop(),
-            0x01 => self.ldbcn16(),
-            0x02 => self.ldbca(),
-            0x03 => self.incbc(),
-            0x04 => self.incb(),
-            0x05 => self.decb(),
-            0x06 => self.ldbn8(),
-            0x07 => self.rlca(),
-            0x08 => self.lda16sp(),
-            0x09 => self.addhlbc(),
-            _ => eprintln!("Instruction {:X?} not yet implemented", op),
-        }
+            0x01 => self.load_r16n16(Register::BC),
+            0x02 => self.not_implemented(),
+            0x03 => self.not_implemented(),
+            0x04 => self.not_implemented(),
+            0x05 => self.not_implemented(),
+            0x06 => self.load_r8n8(Register::B),
+            0x07 => self.not_implemented(),
+            0x08 => self.not_implemented(),
+            0x09 => self.not_implemented(),
+            0x0A => self.not_implemented(),
+            0x0B => self.not_implemented(),
+            0x0C => self.not_implemented(),
+            0x0D => self.not_implemented(),
+            0x0E => self.load_r8n8(Register::C),
+            0x0F => self.not_implemented(),
+            0x10 => self.not_implemented(),
+            0x11 => self.not_implemented(),
+            0x12 => self.not_implemented(),
+            0x13 => self.not_implemented(),
+            0x14 => self.not_implemented(),
+            0x15 => self.not_implemented(),
+            0x16 => self.load_r8n8(Register::D),
+            0x17 => self.not_implemented(),
+            0x18 => self.not_implemented(),
+            0x19 => self.not_implemented(),
+            0x1A => self.not_implemented(),
+            0x1B => self.not_implemented(),
+            0x1C => self.not_implemented(),
+            0x1D => self.not_implemented(),
+            0x1E => self.load_r8n8(Register::E),
+            0x1F => self.not_implemented(),
+            0x20 => self.not_implemented(),
+            0x21 => self.not_implemented(),
+            0x22 => self.not_implemented(),
+            0x23 => self.not_implemented(),
+            0x24 => self.not_implemented(),
+            0x25 => self.not_implemented(),
+            0x26 => self.load_r8n8(Register::H),
+            0x27 => self.not_implemented(),
+            0x28 => self.not_implemented(),
+            0x29 => self.not_implemented(),
+            0x2A => self.not_implemented(),
+            0x2B => self.not_implemented(),
+            0x2C => self.not_implemented(),
+            0x2D => self.not_implemented(),
+            0x2E => self.load_r8n8(Register::L),
+            0x2F => self.not_implemented(),
+            0x30 => self.not_implemented(),
+            0x31 => self.not_implemented(),
+            0x32 => self.not_implemented(),
+            0x33 => self.not_implemented(),
+            0x34 => self.not_implemented(),
+            0x35 => self.not_implemented(),
+            0x36 => self.not_implemented(),
+            0x37 => self.not_implemented(),
+            0x38 => self.not_implemented(),
+            0x39 => self.not_implemented(),
+            0x3A => self.not_implemented(),
+            0x3B => self.not_implemented(),
+            0x3C => self.not_implemented(),
+            0x3D => self.not_implemented(),
+            0x3E => self.load_r8n8(Register::A),
+            0x3F => self.not_implemented(),
+            0x40 => self.load_r8r8(Register::B, Register::B),
+            0x41 => self.load_r8r8(Register::C, Register::B),
+            0x42 => self.load_r8r8(Register::D, Register::B),
+            0x43 => self.load_r8r8(Register::E, Register::B),
+            0x44 => self.load_r8r8(Register::B, Register::H),
+            0x45 => self.load_r8r8(Register::B, Register::L),
+            0x46 => self.not_implemented(),
+            0x47 => self.load_r8r8(Register::B, Register::A),
+            0x48 => self.load_r8r8(Register::C, Register::B),
+            0x49 => self.load_r8r8(Register::C, Register::C),
+            0x4A => self.load_r8r8(Register::C, Register::D),
+            0x4B => self.load_r8r8(Register::C, Register::E),
+            0x4C => self.load_r8r8(Register::C, Register::H),
+            0x4D => self.load_r8r8(Register::C, Register::L),
+            0x4E => self.not_implemented(),
+            0x4F => self.load_r8r8(Register::C, Register::A),
+            0x50 => self.load_r8r8(Register::D, Register::B),
+            0x51 => self.load_r8r8(Register::D, Register::C),
+            0x52 => self.load_r8r8(Register::D, Register::D),
+            0x53 => self.load_r8r8(Register::D, Register::E),
+            0x54 => self.load_r8r8(Register::D, Register::H),
+            0x55 => self.load_r8r8(Register::D, Register::L),
+            0x56 => self.not_implemented(),
+            0x57 => self.load_r8r8(Register::D, Register::A),
+            0x58 => self.load_r8r8(Register::E, Register::B),
+            0x59 => self.load_r8r8(Register::E, Register::C),
+            0x5A => self.load_r8r8(Register::E, Register::D),
+            0x5B => self.load_r8r8(Register::E, Register::E),
+            0x5C => self.load_r8r8(Register::E, Register::H),
+            0x5D => self.load_r8r8(Register::E, Register::L),
+            0x5E => self.not_implemented(),
+            0x5F => self.load_r8r8(Register::E, Register::A),
+            0x60 => self.load_r8r8(Register::H, Register::B),
+            0x61 => self.load_r8r8(Register::H, Register::C),
+            0x62 => self.load_r8r8(Register::H, Register::D),
+            0x63 => self.load_r8r8(Register::H, Register::E),
+            0x64 => self.load_r8r8(Register::H, Register::H),
+            0x65 => self.load_r8r8(Register::H, Register::L),
+            0x66 => self.not_implemented(),
+            0x67 => self.load_r8r8(Register::H, Register::A),
+            0x68 => self.load_r8r8(Register::L, Register::B),
+            0x69 => self.load_r8r8(Register::L, Register::C),
+            0x6A => self.load_r8r8(Register::L, Register::D),
+            0x6B => self.load_r8r8(Register::L, Register::E),
+            0x6C => self.load_r8r8(Register::L, Register::H),
+            0x6D => self.load_r8r8(Register::L, Register::L),
+            0x6E => self.not_implemented(),
+            0x6F => self.load_r8r8(Register::L, Register::A),
+            0x70 => self.not_implemented(),
+            0x71 => self.not_implemented(),
+            0x72 => self.not_implemented(),
+            0x73 => self.not_implemented(),
+            0x74 => self.not_implemented(),
+            0x75 => self.not_implemented(),
+            0x76 => self.not_implemented(),
+            0x77 => self.not_implemented(),
+            0x78 => self.load_r8r8(Register::A, Register::B),
+            0x79 => self.load_r8r8(Register::A, Register::C),
+            0x7A => self.load_r8r8(Register::A, Register::D),
+            0x7B => self.load_r8r8(Register::A, Register::E),
+            0x7C => self.load_r8r8(Register::A, Register::H),
+            0x7D => self.load_r8r8(Register::A, Register::L),
+            0x7E => self.not_implemented(),
+            0x7F => self.load_r8r8(Register::A, Register::A),
+            0x80 => self.not_implemented(),
+            0x81 => self.not_implemented(),
+            0x82 => self.not_implemented(),
+            0x83 => self.not_implemented(),
+            0x84 => self.not_implemented(),
+            0x85 => self.not_implemented(),
+            0x86 => self.not_implemented(),
+            0x87 => self.not_implemented(),
+            0x88 => self.not_implemented(),
+            0x89 => self.not_implemented(),
+            0x8A => self.not_implemented(),
+            0x8B => self.not_implemented(),
+            0x8C => self.not_implemented(),
+            0x8D => self.not_implemented(),
+            0x8E => self.not_implemented(),
+            0x8F => self.not_implemented(),
+            0x90 => self.not_implemented(),
+            0x91 => self.not_implemented(),
+            0x92 => self.not_implemented(),
+            0x93 => self.not_implemented(),
+            0x94 => self.not_implemented(),
+            0x95 => self.not_implemented(),
+            0x96 => self.not_implemented(),
+            0x97 => self.not_implemented(),
+            0x98 => self.not_implemented(),
+            0x99 => self.not_implemented(),
+            0x9A => self.not_implemented(),
+            0x9B => self.not_implemented(),
+            0x9C => self.not_implemented(),
+            0x9D => self.not_implemented(),
+            0x9E => self.not_implemented(),
+            0x9F => self.not_implemented(),
+            0xA0 => self.not_implemented(),
+            0xA1 => self.not_implemented(),
+            0xA2 => self.not_implemented(),
+            0xA3 => self.not_implemented(),
+            0xA4 => self.not_implemented(),
+            0xA5 => self.not_implemented(),
+            0xA6 => self.not_implemented(),
+            0xA7 => self.not_implemented(),
+            0xA8 => self.not_implemented(),
+            0xA9 => self.not_implemented(),
+            0xAA => self.not_implemented(),
+            0xAB => self.not_implemented(),
+            0xAC => self.not_implemented(),
+            0xAD => self.not_implemented(),
+            0xAE => self.not_implemented(),
+            0xAF => self.not_implemented(),
+            0xB0 => self.not_implemented(),
+            0xB1 => self.not_implemented(),
+            0xB2 => self.not_implemented(),
+            0xB3 => self.not_implemented(),
+            0xB4 => self.not_implemented(),
+            0xB5 => self.not_implemented(),
+            0xB6 => self.not_implemented(),
+            0xB7 => self.not_implemented(),
+            0xB8 => self.not_implemented(),
+            0xB9 => self.not_implemented(),
+            0xBA => self.not_implemented(),
+            0xBB => self.not_implemented(),
+            0xBC => self.not_implemented(),
+            0xBD => self.not_implemented(),
+            0xBE => self.not_implemented(),
+            0xBF => self.not_implemented(),
+            0xC0 => self.not_implemented(),
+            0xC1 => self.not_implemented(),
+            0xC2 => self.not_implemented(),
+            0xC3 => self.not_implemented(),
+            0xC4 => self.not_implemented(),
+            0xC5 => self.not_implemented(),
+            0xC6 => self.not_implemented(),
+            0xC7 => self.not_implemented(),
+            0xC8 => self.not_implemented(),
+            0xC9 => self.not_implemented(),
+            0xCA => self.not_implemented(),
+            0xCB => self.not_implemented(),
+            0xCC => self.not_implemented(),
+            0xCD => self.not_implemented(),
+            0xCE => self.not_implemented(),
+            0xCF => self.not_implemented(),
+            0xD0 => self.not_implemented(),
+            0xD1 => self.not_implemented(),
+            0xD2 => self.not_implemented(),
+            0xD3 => self.not_implemented(),
+            0xD4 => self.not_implemented(),
+            0xD5 => self.not_implemented(),
+            0xD6 => self.not_implemented(),
+            0xD7 => self.not_implemented(),
+            0xD8 => self.not_implemented(),
+            0xD9 => self.not_implemented(),
+            0xDA => self.not_implemented(),
+            0xDB => self.not_implemented(),
+            0xDC => self.not_implemented(),
+            0xDD => self.not_implemented(),
+            0xDE => self.not_implemented(),
+            0xDF => self.not_implemented(),
+            0xE0 => self.not_implemented(),
+            0xE1 => self.not_implemented(),
+            0xE2 => self.not_implemented(),
+            0xE3 => self.not_implemented(),
+            0xE4 => self.not_implemented(),
+            0xE5 => self.not_implemented(),
+            0xE6 => self.not_implemented(),
+            0xE7 => self.not_implemented(),
+            0xE8 => self.not_implemented(),
+            0xE9 => self.not_implemented(),
+            0xEA => self.not_implemented(),
+            0xEB => self.not_implemented(),
+            0xEC => self.not_implemented(),
+            0xED => self.not_implemented(),
+            0xEE => self.not_implemented(),
+            0xEF => self.not_implemented(),
+            0xF0 => self.not_implemented(),
+            0xF1 => self.not_implemented(),
+            0xF2 => self.not_implemented(),
+            0xF3 => self.not_implemented(),
+            0xF4 => self.not_implemented(),
+            0xF5 => self.not_implemented(),
+            0xF6 => self.not_implemented(),
+            0xF7 => self.not_implemented(),
+            0xF8 => self.not_implemented(),
+            0xF9 => self.not_implemented(),
+            0xFA => self.not_implemented(),
+            0xFB => self.not_implemented(),
+            0xFC => self.not_implemented(),
+            0xFD => self.not_implemented(),
+            0xFE => self.not_implemented(),
+            0xFF => self.not_implemented(),
+        };
     }
 
     pub fn run(&mut self) {
