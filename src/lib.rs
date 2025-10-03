@@ -332,6 +332,41 @@ impl Cpu {
         };
         self.inc_pc();
     }
+    fn load_hlr8(&mut self, source: Register) {
+        match source {
+            Register::A => self.membus.write(self.get_hl(), self.a),
+            Register::B => self.membus.write(self.get_hl(), self.b),
+            Register::C => self.membus.write(self.get_hl(), self.c),
+            Register::D => self.membus.write(self.get_hl(), self.d),
+            Register::E => self.membus.write(self.get_hl(), self.e),
+            Register::F => self.membus.write(self.get_hl(), self.f),
+            Register::H => self.membus.write(self.get_hl(), self.h),
+            Register::L => self.membus.write(self.get_hl(), self.l),
+            _ => eprintln!("Invalid register"),
+        };
+        self.inc_pc();
+    }
+    fn load_hln8(&mut self) {
+        self.inc_pc();
+        self.membus
+            .write(self.get_hl(), *self.membus.access(self.pc));
+        self.inc_pc();
+    }
+    fn load_r8hl(&mut self, dest: Register) {
+        self.inc_pc();
+        match dest {
+            Register::A => self.a = *self.membus.access(self.get_hl()),
+            Register::B => self.b = *self.membus.access(self.get_hl()),
+            Register::C => self.c = *self.membus.access(self.get_hl()),
+            Register::D => self.d = *self.membus.access(self.get_hl()),
+            Register::E => self.e = *self.membus.access(self.get_hl()),
+            Register::F => self.f = *self.membus.access(self.get_hl()),
+            Register::H => self.h = *self.membus.access(self.get_hl()),
+            Register::L => self.l = *self.membus.access(self.get_hl()),
+            _ => eprintln!("Invalid register"),
+        };
+        self.inc_pc();
+    }
     fn load_r16n16(&mut self, dest: Register) {
         self.inc_pc();
         match dest {
@@ -367,7 +402,7 @@ impl Cpu {
             0x0E => self.load_r8n8(Register::C),
             0x0F => self.not_implemented(),
             0x10 => self.not_implemented(),
-            0x11 => self.not_implemented(),
+            0x11 => self.load_r16n16(Register::DE),
             0x12 => self.not_implemented(),
             0x13 => self.not_implemented(),
             0x14 => self.not_implemented(),
@@ -420,7 +455,7 @@ impl Cpu {
             0x43 => self.load_r8r8(Register::E, Register::B),
             0x44 => self.load_r8r8(Register::B, Register::H),
             0x45 => self.load_r8r8(Register::B, Register::L),
-            0x46 => self.not_implemented(),
+            0x46 => self.load_r8hl(Register::B),
             0x47 => self.load_r8r8(Register::B, Register::A),
             0x48 => self.load_r8r8(Register::C, Register::B),
             0x49 => self.load_r8r8(Register::C, Register::C),
@@ -428,7 +463,7 @@ impl Cpu {
             0x4B => self.load_r8r8(Register::C, Register::E),
             0x4C => self.load_r8r8(Register::C, Register::H),
             0x4D => self.load_r8r8(Register::C, Register::L),
-            0x4E => self.not_implemented(),
+            0x4E => self.load_r8hl(Register::C),
             0x4F => self.load_r8r8(Register::C, Register::A),
             0x50 => self.load_r8r8(Register::D, Register::B),
             0x51 => self.load_r8r8(Register::D, Register::C),
@@ -436,7 +471,7 @@ impl Cpu {
             0x53 => self.load_r8r8(Register::D, Register::E),
             0x54 => self.load_r8r8(Register::D, Register::H),
             0x55 => self.load_r8r8(Register::D, Register::L),
-            0x56 => self.not_implemented(),
+            0x56 => self.load_r8hl(Register::D),
             0x57 => self.load_r8r8(Register::D, Register::A),
             0x58 => self.load_r8r8(Register::E, Register::B),
             0x59 => self.load_r8r8(Register::E, Register::C),
@@ -444,7 +479,7 @@ impl Cpu {
             0x5B => self.load_r8r8(Register::E, Register::E),
             0x5C => self.load_r8r8(Register::E, Register::H),
             0x5D => self.load_r8r8(Register::E, Register::L),
-            0x5E => self.not_implemented(),
+            0x5E => self.load_r8hl(Register::E),
             0x5F => self.load_r8r8(Register::E, Register::A),
             0x60 => self.load_r8r8(Register::H, Register::B),
             0x61 => self.load_r8r8(Register::H, Register::C),
@@ -452,7 +487,7 @@ impl Cpu {
             0x63 => self.load_r8r8(Register::H, Register::E),
             0x64 => self.load_r8r8(Register::H, Register::H),
             0x65 => self.load_r8r8(Register::H, Register::L),
-            0x66 => self.not_implemented(),
+            0x66 => self.load_r8hl(Register::H),
             0x67 => self.load_r8r8(Register::H, Register::A),
             0x68 => self.load_r8r8(Register::L, Register::B),
             0x69 => self.load_r8r8(Register::L, Register::C),
@@ -460,23 +495,23 @@ impl Cpu {
             0x6B => self.load_r8r8(Register::L, Register::E),
             0x6C => self.load_r8r8(Register::L, Register::H),
             0x6D => self.load_r8r8(Register::L, Register::L),
-            0x6E => self.not_implemented(),
+            0x6E => self.load_r8hl(Register::L),
             0x6F => self.load_r8r8(Register::L, Register::A),
-            0x70 => self.not_implemented(),
-            0x71 => self.not_implemented(),
-            0x72 => self.not_implemented(),
-            0x73 => self.not_implemented(),
-            0x74 => self.not_implemented(),
-            0x75 => self.not_implemented(),
+            0x70 => self.load_hlr8(Register::B),
+            0x71 => self.load_hlr8(Register::C),
+            0x72 => self.load_hlr8(Register::D),
+            0x73 => self.load_hlr8(Register::E),
+            0x74 => self.load_hlr8(Register::H),
+            0x75 => self.load_hlr8(Register::L),
             0x76 => self.not_implemented(),
-            0x77 => self.not_implemented(),
+            0x77 => self.load_hlr8(Register::A),
             0x78 => self.load_r8r8(Register::A, Register::B),
             0x79 => self.load_r8r8(Register::A, Register::C),
             0x7A => self.load_r8r8(Register::A, Register::D),
             0x7B => self.load_r8r8(Register::A, Register::E),
             0x7C => self.load_r8r8(Register::A, Register::H),
             0x7D => self.load_r8r8(Register::A, Register::L),
-            0x7E => self.not_implemented(),
+            0x7E => self.load_r8hl(Register::A),
             0x7F => self.load_r8r8(Register::A, Register::A),
             0x80 => self.not_implemented(),
             0x81 => self.not_implemented(),
