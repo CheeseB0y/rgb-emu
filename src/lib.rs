@@ -381,13 +381,31 @@ impl Cpu {
         self.inc_pc();
         self.inc_pc();
     }
+    fn load_r16a(&mut self, addr: Register) {
+        match addr {
+            Register::AF => self.membus.write(self.get_af(), self.a),
+            Register::BC => self.membus.write(self.get_bc(), self.a),
+            Register::DE => self.membus.write(self.get_de(), self.a),
+            Register::HL => self.membus.write(self.get_hl(), self.a),
+            Register::PC => self.membus.write(self.pc, self.a),
+            Register::SP => self.membus.write(self.sp, self.a),
+            _ => eprintln!("Invalid register"),
+        }
+        self.inc_pc();
+    }
+    fn load_n16a(&mut self) {
+        self.inc_pc();
+        self.membus.write(self.get_16b_value(), self.a);
+        self.inc_pc();
+        self.inc_pc();
+    }
 
     fn exec(&mut self) {
         let op: &u8 = self.membus.access(self.pc);
         match op {
             0x00 => self.nop(),
             0x01 => self.load_r16n16(Register::BC),
-            0x02 => self.not_implemented(),
+            0x02 => self.load_r16a(Register::BC),
             0x03 => self.not_implemented(),
             0x04 => self.not_implemented(),
             0x05 => self.not_implemented(),
@@ -403,7 +421,7 @@ impl Cpu {
             0x0F => self.not_implemented(),
             0x10 => self.not_implemented(),
             0x11 => self.load_r16n16(Register::DE),
-            0x12 => self.not_implemented(),
+            0x12 => self.load_r16a(Register::DE),
             0x13 => self.not_implemented(),
             0x14 => self.not_implemented(),
             0x15 => self.not_implemented(),
