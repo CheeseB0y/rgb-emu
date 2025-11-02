@@ -399,6 +399,13 @@ impl Cpu {
         self.inc_pc();
         self.inc_pc();
     }
+    fn jp_n16(&mut self) {
+        self.inc_pc();
+        self.pc = self.get_16b_value();
+    }
+    fn jp_hl(&mut self) {
+        self.pc = self.get_hl();
+    }
 
     fn exec(&mut self) {
         let op: &u8 = self.membus.access(self.pc);
@@ -636,7 +643,7 @@ impl Cpu {
             0xE6 => self.not_implemented(),
             0xE7 => self.not_implemented(),
             0xE8 => self.not_implemented(),
-            0xE9 => self.not_implemented(),
+            0xE9 => self.jp_hl(),
             0xEA => self.not_implemented(),
             0xEB => self.not_implemented(),
             0xEC => self.not_implemented(),
