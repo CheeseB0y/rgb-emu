@@ -257,20 +257,20 @@ impl Cpu {
 
     fn set_af(&mut self, value: u16) {
         self.a = (value >> 8) as u8;
-        self.f = (value & 0x0F) as u8;
+        self.f = (value & 0x00FF) as u8;
     }
 
     fn set_bc(&mut self, value: u16) {
         self.b = (value >> 8) as u8;
-        self.c = (value & 0x0F) as u8;
+        self.c = (value & 0x00FF) as u8;
     }
     fn set_de(&mut self, value: u16) {
         self.d = (value >> 8) as u8;
-        self.e = (value & 0x0F) as u8;
+        self.e = (value & 0x00FF) as u8;
     }
     fn set_hl(&mut self, value: u16) {
         self.h = (value >> 8) as u8;
-        self.l = (value & 0x0F) as u8;
+        self.l = (value & 0x00FF) as u8;
     }
 
     fn get_16b_value(&self) -> u16 {
@@ -790,5 +790,37 @@ impl App for Gui {
             ui.label(format!("SP: {:X?}", self.cpu.sp));
             ui.label(format!("PC: {:X?}", self.cpu.pc));
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpu_16bit_register_test() {
+        let rom: Rom = Rom::new(&"ROMs/Tetris.gb".to_string());
+        let mut cpu: Cpu = Cpu::new(MemBus::new(rom));
+        cpu.set_af(0xFFEE);
+        assert_eq!(cpu.a, 0xFF);
+        assert_eq!(cpu.f, 0xEE);
+        assert_eq!(cpu.get_af(), 0xFFEE);
+        cpu.set_bc(0xFFEE);
+        assert_eq!(cpu.b, 0xFF);
+        assert_eq!(cpu.c, 0xEE);
+        assert_eq!(cpu.get_bc(), 0xFFEE);
+        cpu.set_de(0xFFEE);
+        assert_eq!(cpu.d, 0xFF);
+        assert_eq!(cpu.e, 0xEE);
+        assert_eq!(cpu.get_de(), 0xFFEE);
+        cpu.set_hl(0xFFEE);
+        assert_eq!(cpu.h, 0xFF);
+        assert_eq!(cpu.l, 0xEE);
+        assert_eq!(cpu.get_hl(), 0xFFEE);
+    }
+    #[test]
+    fn test_2() {
+        let rom: Rom = Rom::new(&"ROMs/Tetris.gb".to_string());
+        let mut cpu: Cpu = Cpu::new(MemBus::new(rom));
     }
 }
