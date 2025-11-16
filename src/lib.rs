@@ -353,7 +353,6 @@ impl Cpu {
         self.inc_pc();
     }
     fn load_r8hl(&mut self, dest: Register) {
-        self.inc_pc();
         match dest {
             Register::A => self.a = *self.membus.access(self.get_hl()),
             Register::B => self.b = *self.membus.access(self.get_hl()),
@@ -819,8 +818,42 @@ mod tests {
         assert_eq!(cpu.get_hl(), 0xFFEE);
     }
     #[test]
-    fn test_2() {
+    fn pc_8bit_load_test() {
         let rom: Rom = Rom::new(&"ROMs/Tetris.gb".to_string());
         let mut cpu: Cpu = Cpu::new(MemBus::new(rom));
+        cpu.load_r8n8(Register::A);
+        assert_eq!(cpu.a, 0xC3);
+        assert_eq!(cpu.pc, 0x0102);
+        cpu.load_r8n8(Register::B);
+        assert_eq!(cpu.b, 0x01);
+        assert_eq!(cpu.pc, 0x0104);
+        cpu.load_r8n8(Register::C);
+        assert_eq!(cpu.c, 0xED);
+        assert_eq!(cpu.pc, 0x0106);
+        cpu.load_r8n8(Register::D);
+        assert_eq!(cpu.d, 0x66);
+        assert_eq!(cpu.pc, 0x0108);
+        cpu.load_r8n8(Register::E);
+        assert_eq!(cpu.e, 0x0D);
+        assert_eq!(cpu.pc, 0x010A);
+        cpu.load_r8n8(Register::F);
+        assert_eq!(cpu.f, 0x0B);
+        assert_eq!(cpu.pc, 0x010C);
+        cpu.load_r8n8(Register::H);
+        assert_eq!(cpu.h, 0x73);
+        assert_eq!(cpu.pc, 0x010E);
+        cpu.load_r8n8(Register::L);
+        assert_eq!(cpu.l, 0x83);
+        assert_eq!(cpu.pc, 0x0110);
+        cpu.set_hl(0x0010);
+        cpu.load_r8hl(Register::A);
+        assert_eq!(cpu.a, 0xFF);
+        assert_eq!(cpu.pc, 0x0111);
+    }
+    #[test]
+    fn test_3() {
+        let rom: Rom = Rom::new(&"ROMs/Tetris.gb".to_string());
+        let mut cpu: Cpu = Cpu::new(MemBus::new(rom));
+
     }
 }
